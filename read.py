@@ -29,7 +29,7 @@ def create_connection():
     return None
 
 
-def read_uncommited_demo():
+def read_uncommited():
     """
     Shows how READ UNCOMMITED isolation level works.
     Shows dirty read.
@@ -73,7 +73,7 @@ def read_uncommited_demo():
         if connection2 and connection2.is_connected():
             connection2.close()
 
-def read_commited_demo():
+def read_commited():
     """
     Shows how READ COMMITED isolation level works.
     Shows NO dirty read.
@@ -117,9 +117,57 @@ def read_commited_demo():
         if connection2 and connection2.is_connected():
             connection2.close()
 
+def repeatable_read():
+    """
+    Demonstrates how REPEATABLE READ isolation level works.
+    Ensures that the same data is read multiple times with the same result.
+    :return: void
+    """
+    connection1 = create_connection()
+    connection2 = create_connection()
+
+    try:
+        cursor1 = connection1.cursor()
+        cursor2 = connection2.cursor()
+
+        # Transaction 1: Read Uncommitted
+        print(f"Transaction 1 started: {datetime.now()}")
+        connection1.start_transaction(isolation_level='REPEATABLE READ')
+        cursor1.execute("SELECT balance FROM accounts WHERE name = 'Alice'")
+        balance_before = cursor1.fetchone()[0]
+        print(f"Transaction 1: Alice's initial balance = {balance_before}")
+
+        # Transaction 2: Update balance
+        print(f"Transaction 2 started: {datetime.now()}")
+        connection2.start_transaction(isolation_level='READ COMMITTED')
+        cursor2.execute("UPDATE accounts SET balance = 9999 WHERE name = 'Alice'")
+        connection2.commit()
+
+        cursor1.execute("SELECT balance FROM accounts WHERE name = 'Alice'")
+        balance_after = cursor1.fetchone()[0]
+        print(f"Transaction 1: Alice's balance after update = {balance_after}")
+
+        print(f"Transaction 1 rollback(): {datetime.now()}")
+        connection1.rollback()
+
+    except Error as e:
+        print(f"Error: {e}")
+    finally:
+        if cursor1:
+            cursor1.close()
+        if connection1 and connection1.is_connected():
+            connection1.close()
+        if cursor2:
+            cursor2.close()
+        if connection2 and connection2.is_connected():
+            connection2.close()
+
 if __name__ == "__main__":
     print("Demonstrating Dirty Read with READ UNCOMMITTED")
-    read_uncommited_demo()
+    read_uncommited()
 
     print("\nDemonstrating No Dirty Read with READ COMMITTED")
-    read_commited_demo()
+    read_commited()
+
+    print("\nDemonstrating REPEATBLE READ")
+    repeatable_read()
