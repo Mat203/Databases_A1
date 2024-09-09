@@ -125,10 +125,12 @@ def repeatable_read():
     """
     connection1 = create_connection()
     connection2 = create_connection()
+    connection3 = create_connection()
 
     try:
         cursor1 = connection1.cursor()
         cursor2 = connection2.cursor()
+        cursor3 = connection3.cursor()
 
         # Transaction 1: Read Uncommitted
         print(f"Transaction 1 started: {datetime.now()}")
@@ -150,8 +152,121 @@ def repeatable_read():
         print(f"Transaction 1 rollback(): {datetime.now()}")
         connection1.rollback()
 
+        # Transaction 3: Set initial balance to 1000
+        connection3.start_transaction(isolation_level='READ COMMITTED')
+        cursor3.execute("UPDATE accounts SET balance = 1000 WHERE name = 'Alice'")
+        connection3.commit()
+
     except Error as e:
         print(f"Error: {e}")
+    finally:
+        if cursor1:
+            cursor1.close()
+        if connection1 and connection1.is_connected():
+            connection1.close()
+        if cursor2:
+            cursor2.close()
+        if connection2 and connection2.is_connected():
+            connection2.close()
+        if cursor3:
+            cursor3.close()
+        if connection3 and connection3.is_connected():
+            connection3.close()
+
+def non_repeatable_read():
+    """
+    Demonstrates non-repeatable read with READ COMMITTED isolation level.
+    :return: void
+    """
+    connection1 = create_connection()
+    connection2 = create_connection()
+    connection3 = create_connection()
+
+    try:
+        cursor1 = connection1.cursor()
+        cursor2 = connection2.cursor()
+        cursor3 = connection3.cursor()
+
+        # Transaction 1: Read balance (first time)
+        print(f"Transaction 1 started: {datetime.now()}")
+        connection1.start_transaction(isolation_level='READ COMMITTED')
+        cursor1.execute("SELECT balance FROM accounts WHERE name = 'Alice'")
+        balance_before = cursor1.fetchone()[0]
+        print(f"Transaction 1: Alice's initial balance = {balance_before}")
+
+        # Transaction 2: Update balance
+        print(f"Transaction 2 started: {datetime.now()}")
+        connection2.start_transaction(isolation_level='READ COMMITTED')
+        cursor2.execute("UPDATE accounts SET balance = 9999 WHERE name = 'Alice'")
+        print(f"Transaction 2 updated Alice's balance to 9999")
+        connection2.commit()
+
+        cursor1.execute("SELECT balance FROM accounts WHERE name = 'Alice'")
+        balance_after = cursor1.fetchone()[0]
+        print(f"Transaction 1: Alice's balance after update in another transaction = {balance_after}")
+
+        print(f"Transaction 1 commit(): {datetime.now()}")
+        connection1.commit()
+
+        # Transaction 3: Set initial balance to 1000
+        connection3.start_transaction(isolation_level='READ COMMITTED')
+        cursor3.execute("UPDATE accounts SET balance = 1000 WHERE name = 'Alice'")
+        connection3.commit()
+
+
+    except Error as e:
+        print(f"Error: {e}")
+    finally:
+        if cursor1:
+            cursor1.close()
+        if connection1 and connection1.is_connected():
+            connection1.close()
+        if cursor2:
+            cursor2.close()
+        if connection2 and connection2.is_connected():
+            connection2.close()
+        if cursor3:
+            cursor3.close()
+        if connection3 and connection3.is_connected():
+            connection3.close()
+
+
+def deadlock():
+    """
+    Demonstrates a deadlock scenario
+    :return: void
+    """
+    connection1 = create_connection()
+    connection2 = create_connection()
+
+    try:
+        cursor1 = connection1.cursor()
+        cursor2 = connection2.cursor()
+
+        # Transaction 1: Locks Alice's account
+        print(f"Transaction 1 started: {datetime.now()}")
+        connection1.start_transaction()
+        cursor1.execute("SELECT balance FROM accounts WHERE name = 'Alice' FOR UPDATE")
+        print("Transaction 1 locked Alice's account.")
+
+        # Transaction 2: Locks Bob's account
+        print(f"Transaction 2 started: {datetime.now()}")
+        connection2.start_transaction()
+        cursor2.execute("SELECT balance FROM accounts WHERE name = 'Bob' FOR UPDATE")
+        print("Transaction 2 locked Bob's account.")
+
+        print("Transaction 1 attempts to lock Bob's account (Transction 2 is blocking)...")
+        cursor1.execute("SELECT balance FROM accounts WHERE name = 'Bob' FOR UPDATE")
+
+        print("Transaction 2 attempts to lock Alice's account (blocked by Transaction 1)...")
+        cursor2.execute("SELECT balance FROM accounts WHERE name = 'Alice' FOR UPDATE")
+
+        connection1.commit()
+        connection2.commit()
+
+    except Error as e:
+        print(f"Error: {e}")
+
     finally:
         if cursor1:
             cursor1.close()
@@ -171,3 +286,9 @@ if __name__ == "__main__":
 
     print("\nDemonstrating REPEATBLE READ")
     repeatable_read()
+
+    print("\nDemonstrating NON-REPEATBLE READ")
+    non_repeatable_read()
+
+    print("\nDemonstrating Deadlock")
+    deadlock()
